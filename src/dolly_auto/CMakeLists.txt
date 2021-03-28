@@ -12,10 +12,10 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(dolly_data REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 set(target 
   "dolly_print_locale" 
@@ -46,6 +46,7 @@ ament_target_dependencies(dolly_auto
   "geometry_msgs"
   "dolly_data"
   "nav_msgs"
+  "sensor_msgs"
 )
 
 ###########################################################################
