@@ -69,6 +69,7 @@ public:
   void OnSensorMsg(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
     laser_data = *msg;
+  }
 };
 
 class DollyAuto : public rclcpp::Node
@@ -96,6 +97,23 @@ private:
     return std::atan2(
         2 * (orientation.w * orientation.z + orientation.x * orientation.y),
         1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z));
+  }
+  bool readSensor(int &min, int &max)
+  {
+    min = max = -1;
+    bool status = 1;
+    for (int a = 0; a < laser_data.ranges.size(); a++)
+    {
+      if (laser_data.ranges[a] <= 5)
+      {
+        if (min == -1)
+          min = a;
+        max = a;
+        if (status && laser_data.ranges[a] <= min_dist)
+          status = 0;
+      }
+    }
+    return !status;
   }
 
 public:
@@ -145,41 +163,44 @@ public:
 
     do
     {
-
-      int minPos = -1, maxPos = -1;
-      for (int a = 0; a < laser_data.ranges.size(); a++)
+      int minPos, maxPos;
+      while (readSensor(minPos, maxPos))
       {
-        if (laser_data.ranges[a] <= min_dist)
+        float aux = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? -1 : 1);
+        if (aux != sendPos.angular.z)
         {
-          if (minPos == -1)
-            minPos = a;
-          maxPos = a;
+          RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Corrigindo rota...");
+          sendPos.angular.z = aux;
+          sendPos.linear.x = velLinX;
+          dollySetPosition->publish(sendPos);
         }
       }
-      if (minPos != -1)
-      {
-        sendPos.angular.z = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? -1 : 1);
-        sendPos.linear.x = velLinX;
-        dollySetPosition->publish(sendPos);
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Foram encontrado obstaculos nos limites: %d e %d", minPos, maxPos);
-        bool sensor_status;
-        do
+      /*
+        if (readSensor(minPos, maxPos))
         {
-          sensor_status = false;
-          for (int a = 0; a < laser_data.ranges.size(); a++)
-            if (laser_data.ranges[a] <= min_dist)
+          sendPos.angular.z = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? -1 : 1);
+          sendPos.linear.x = velLinX;
+          dollySetPosition->publish(sendPos);
+          RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Foram encontrado obstaculos!");
+          do
+          {
+            float aux = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? -1 : 1);
+            if (sendPos.angular.z != aux)
             {
-              sensor_status = true;
-              break;
+              sendPos.angular.z = aux;
+              sendPos.linear.x = velLinX;
+              dollySetPosition->publish(sendPos);
+
+              RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Corrigindo rota...");
             }
+          } while (readSensor(minPos, maxPos));
+          sendPos.angular.z = 0;
+          sendPos.linear.x = velLinX;
+          dollySetPosition->publish(sendPos);
 
-        } while (sensor_status);
-        sendPos.angular.z = 0;
-        sendPos.linear.x = velLinX;
-        dollySetPosition->publish(sendPos);
-
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Obstaculos resolvidos!");
-      }
+          RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Obstaculos resolvidos!");
+        }
+        */
       angleDolly = getAngleDolly();
       angle = getAngle(position.x, position.y, request->x, request->y);
 
