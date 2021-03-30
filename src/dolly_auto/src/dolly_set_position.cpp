@@ -13,9 +13,13 @@ int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
 
-  if (argc != 4)
+  if(argc == 4 && atoll(argv[3]) != 0)
   {
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "erro na quantidade de parametros, e");
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "O valor de Z foi reconfigurado para 0 pois a dolly não tem asas!");
+  }
+  if (argc != 4 && argc != 3)
+  {
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "erro na quantidade de parametros!");
     return 1;
   }
 

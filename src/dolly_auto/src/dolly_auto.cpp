@@ -8,6 +8,8 @@
 #include <dolly_data/srv/dolly_position.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 
+#define DIRECTION_ANGLE(x1, y1, x2, y2) (y2 - y1) * (x1) - (x2 - x1) * (y1)
+
 using namespace dolly_data::srv;
 using namespace std;
 using std::placeholders::_1;
@@ -67,7 +69,6 @@ public:
   void OnSensorMsg(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
     laser_data = *msg;
-  }
 };
 
 class DollyAuto : public rclcpp::Node
@@ -113,9 +114,17 @@ public:
   void dolly_control(const shared_ptr<rmw_request_id_t> request_header, const shared_ptr<DollyPosition::Request> request, shared_ptr<DollyPosition::Response> response)
   {
     (void)request_header;
+    if (abs(position.x - request->x) <= errorLin && abs(position.y - request->y) <= errorLin)
+    {
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Pera ai... você está bem proximo do ponto, acho que não preciso me movimentar...");
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Pos: x = %f, y = %f, erro = %f", position.x, position.y, sqrt(pow(position.x - request->x, 2) + pow(position.y - request->y, 2)));
+      response->status = 1;
+      return;
+    }
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Movimentação iniciada!");
     auto sendPos = geometry_msgs::msg::Twist();
+    /*
     angle = getAngle(position.x, position.y, request->x, request->y);
     sendPos.angular.z = velAngZ * (angle > getAngleDolly() ? 1 : -1);
     dollySetPosition->publish(sendPos);
@@ -129,13 +138,14 @@ public:
     sendPos.angular.z = 0;
     sendPos.linear.x = velLinX;
     dollySetPosition->publish(sendPos);
-
+    */
     sendPos.angular.z = 0;
     sendPos.linear.x = velLinX;
     dollySetPosition->publish(sendPos);
 
     do
     {
+
       int minPos = -1, maxPos = -1;
       for (int a = 0; a < laser_data.ranges.size(); a++)
       {
@@ -170,15 +180,24 @@ public:
 
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Obstaculos resolvidos!");
       }
-
       angleDolly = getAngleDolly();
       angle = getAngle(position.x, position.y, request->x, request->y);
 
-      if (abs(angle - angleDolly) > errorAng)
+      float directionAngle = DIRECTION_ANGLE(cos(angleDolly), sin(angleDolly), cos(angle), sin(angle));
+      if (directionAngle != sendPos.angular.z)
       {
-        sendPos.angular.z = velAngZ * (angle > getAngleDolly() ? 1 : -1);
+
+        sendPos.angular.z = directionAngle;
+        dollySetPosition->publish(sendPos);
+      }
+      /*
+      
+      if (abs(angle - angleDolly) > errorAng*2)
+      {
+        sendPos.angular.z = velAngZ * (angle > angleDolly ? 1 : -1);
         sendPos.linear.x = velLinX;
         dollySetPosition->publish(sendPos);
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Correção: ang=%f, dol=%f, Z=%f", angle, angleDolly, sendPos.angular.z);
       }
       else if (sendPos.angular.z != 0)
       {
@@ -186,88 +205,16 @@ public:
         sendPos.linear.x = velLinX;
         dollySetPosition->publish(sendPos);
       }
+      */
 
     } while ((abs(position.x - request->x) > errorLin || abs(position.y - request->y) > errorLin));
 
-    sendPos.linear.x = sendPos.angular.z= 0;
+    sendPos.linear.x = sendPos.angular.z = 0;
     dollySetPosition->publish(sendPos);
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Solicitação concluida...");
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Pos: x = %f, y = %f, distancia = %f", position.x, position.y, sqrt(pow(position.x-request->x, 2)+pow(position.y-request->y, 2)));
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Pos: x = %f, y = %f, erro = %f", position.x, position.y, sqrt(pow(position.x - request->x, 2) + pow(position.y - request->y, 2)));
     response->status = 1;
   }
-  /*
-  void dolly_control2(const shared_ptr<rmw_request_id_t> request_header, const shared_ptr<DollyPosition::Request> request, shared_ptr<DollyPosition::Response> response)
-  {
-    (void)request_header;
-    auto sendPos = geometry_msgs::msg::Twist();
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Movimentação iniciada!");
-    angle = getAngle(position.x, position.y, request->x, request->y);
-
-    sendPos.angular.z = velAngZ * (angle > getAngleDolly() ? 1 : -1);
-    dollySetPosition->publish(sendPos);
-
-    sendPos.angular.z = 0;
-    sendPos.linear.x = velLinX;
-    //dollySetPosition->publish(sendPos);
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Movimentação linear!");
-    exit;
-
-    while ((abs(position.x - request->x) > errorLin || abs(position.y - request->y) > errorLin))
-    {
-      float auxRange = laser_data.range_max;
-      if (auxRange != std::numeric_limits<float>::max())
-      {
-        int minPos = -1, maxPos;
-        for (int a = 0; a < laser_data.ranges.size(); a++)
-        {
-          if (laser_data.ranges[a] <= min_dist)
-          {
-            if (minPos == -1)
-              minPos = a;
-            maxPos = a;
-          }
-        }
-        //sendPos.angular.z = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? 1 : -1);
-        //sendPos.linear.x = velLinX;
-        //dollySetPosition->publish(sendPos);
-        bool sensor_status;
-        do
-        {
-          sensor_status = true;
-          for (int a = 0; a < laser_data.ranges.size(); a++)
-            if (laser_data.ranges[a] <= min_dist)
-            {
-              sensor_status = false;
-              break;
-            }
-
-        } while (sensor_status);
-      }
-      else
-      {
-        angleDolly = getAngleDolly();
-        angle = getAngle(position.x, position.y, request->x, request->y);
-
-        if (abs(angle - angleDolly) > errorAng)
-        {
-          sendPos.angular.z = velAngZ * (angle > getAngleDolly() ? 1 : -1);
-          sendPos.linear.x = velLinX;
-          dollySetPosition->publish(sendPos);
-        }
-        else if (sendPos.angular.z != 0)
-        {
-          sendPos.angular.z = 0;
-          sendPos.linear.x = velLinX;
-          dollySetPosition->publish(sendPos);
-        }
-      }
-    }
-    sendPos = geometry_msgs::msg::Twist();
-    sendPos.linear.x = 0;
-    dollySetPosition->publish(sendPos);
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Solicitação concluida!");
-    response->status = 1;
-  }*/
 };
 
 int main(int argc, char **argv)
