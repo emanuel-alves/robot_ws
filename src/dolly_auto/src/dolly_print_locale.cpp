@@ -24,17 +24,17 @@ private:
   {
     cout << "\nPosition:\n";
     cout <<   "   Escalar:\n";
-    cout <<   "     x: " << locale->pose.pose.position.x << endl;
-    cout <<   "     y: " << locale->pose.pose.position.y << endl;
-    cout <<   "     z: " << locale->pose.pose.position.z << endl;
-    cout <<   "   angle: " << std::atan2(
+    cout <<   "     x: " << (locale->pose.pose.position.x  >= 0 ? " " : "") << locale->pose.pose.position.x << endl;
+    cout <<   "     y: " << (locale->pose.pose.position.y  >= 0 ? " " : "") << locale->pose.pose.position.y << endl;
+    cout <<   "     z: " << (locale->pose.pose.position.z  >= 0 ? " " : "") << locale->pose.pose.position.z << endl;
+    cout <<   "   angle: " << (M_PI + std::atan2(
         2 * (locale->pose.pose.orientation.w * locale->pose.pose.orientation.z + locale->pose.pose.orientation.x * locale->pose.pose.orientation.y),
-        1 - 2 * (locale->pose.pose.orientation.y * locale->pose.pose.orientation.y + locale->pose.pose.orientation.z * locale->pose.pose.orientation.z)) << endl;
+        1 - 2 * (locale->pose.pose.orientation.y * locale->pose.pose.orientation.y + locale->pose.pose.orientation.z * locale->pose.pose.orientation.z)))*(180/M_PI) << endl;
     cout <<   "   Quartenios:\n";
-    cout <<   "     x: " << locale->pose.pose.orientation.x << " -> " <<(2*acos(locale->pose.pose.orientation.x))*(180/M_PI) << endl;    
-    cout <<   "     y: " << locale->pose.pose.orientation.y << " -> " <<(2*acos(locale->pose.pose.orientation.y))*(180/M_PI) << endl;
-    cout <<   "     z: " << locale->pose.pose.orientation.z << " -> " <<(2*acos(locale->pose.pose.orientation.z))*(180/M_PI) << endl;
-    cout <<   "     w: " << locale->pose.pose.orientation.w << " -> " <<(2*acos(locale->pose.pose.orientation.w))*(180/M_PI) << endl; //Este aqui
+    cout <<   "     x: " << (locale->pose.pose.orientation.x >= 0 ? " " : "") << locale->pose.pose.orientation.x << endl;    
+    cout <<   "     y: " << (locale->pose.pose.orientation.y >= 0 ? " " : "") << locale->pose.pose.orientation.y << endl;
+    cout <<   "     z: " << (locale->pose.pose.orientation.z >= 0 ? " " : "") << locale->pose.pose.orientation.z << endl;
+    cout <<   "     w: " << (locale->pose.pose.orientation.w >= 0 ? " " : "") << locale->pose.pose.orientation.w << endl; //Este aqui
 
   }
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_; // CHANGE

@@ -104,7 +104,7 @@ private:
     bool status = 1;
     for (int a = 0; a < laser_data.ranges.size(); a++)
     {
-      if (laser_data.ranges[a] <= 5)
+      if (laser_data.ranges[a] <= 4)
       {
         if (min == -1)
           min = a;
