@@ -1,7 +1,7 @@
 #include <memory>
 #include <utility>
 #include <limits>
-#include<unistd.h>
+#include <unistd.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -99,11 +99,12 @@ private:
         2 * (orientation.w * orientation.z + orientation.x * orientation.y),
         1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z));
   }
-  bool readSensor(int &min, int &max, float &minDis)
+  bool readSensor(int &min, int &max, float &minDis, float &disLine)
   {
     min = max = -1;
-    minDis = 11;
     bool status = 1;
+    minDis = 11;
+
     for (int a = 0; a < laser_data.ranges.size(); a++)
     {
       if (laser_data.ranges[a] <= 4)
@@ -114,7 +115,11 @@ private:
         if (status && laser_data.ranges[a] <= min_dist)
           status = 0;
       }
-      if(minDis > laser_data.ranges[a]) minDis = laser_data.ranges[a];
+      if (laser_data.ranges.size() / 2 == a)
+        disLine = laser_data.ranges[a];
+
+      if (minDis > laser_data.ranges[a])
+        minDis = laser_data.ranges[a];
     }
     return !status;
   }
@@ -123,7 +128,7 @@ public:
   DollyAuto() : Node("dolly_auto")
   {
     velLinX = 1;
-    velAngZ = 0.1;
+    velAngZ = 0.2;
     errorAng = 0.1;
     errorLin = 0.2;
     min_dist = 3.0;
@@ -132,7 +137,6 @@ public:
     dollySetPosition = this->create_publisher<geometry_msgs::msg::Twist>(
         "/dolly/cmd_vel", 10);
   }
-
   void dolly_control(const shared_ptr<rmw_request_id_t> request_header, const shared_ptr<DollyPosition::Request> request, shared_ptr<DollyPosition::Response> response)
   {
     (void)request_header;
@@ -146,7 +150,9 @@ public:
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Movimentação iniciada!");
     auto sendPos = geometry_msgs::msg::Twist();
-  
+    int minPos, maxPos;
+    float minDis, disLine;
+    /*
     angle = getAngle(position.x, position.y, request->x, request->y);
     sendPos.angular.z = velAngZ * (angle > getAngleDolly() ? 1 : -1);
     dollySetPosition->publish(sendPos);
@@ -160,31 +166,26 @@ public:
     sendPos.angular.z = 0;
     sendPos.linear.x = velLinX;
     dollySetPosition->publish(sendPos);
-    
+    */
     sendPos.angular.z = 0;
     sendPos.linear.x = velLinX;
     dollySetPosition->publish(sendPos);
 
-    do
+    while ((abs(position.x - request->x) > errorLin || abs(position.y - request->y) > errorLin))
     {
-      int minPos, maxPos;
-      float minDis;
-      while (readSensor(minPos, maxPos, minDis))
+      while (readSensor(minPos, maxPos, minDis, disLine))
       {
         if (minDis > sqrt(pow(position.x - request->x, 2) + pow(position.y - request->y, 2)))
           break;
-        float aux = 2*velAngZ * (minPos >= laser_data.ranges.size() - maxPos ? -1 : 1);
+        float aux = velAngZ * (minPos > laser_data.ranges.size() - maxPos ? -1 : 1);
         if (aux != sendPos.angular.z)
         {
           RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Corrigindo rota...");
-          sendPos.angular.z = aux;
+          sendPos.angular.z = aux*0.8;
           sendPos.linear.x = velLinX;
           dollySetPosition->publish(sendPos);
         }
       }
-      usleep(50000);
-
-      
       angleDolly = getAngleDolly();
       angle = getAngle(position.x, position.y, request->x, request->y);
 
@@ -194,8 +195,8 @@ public:
         sendPos.angular.z = directionAngle;
         dollySetPosition->publish(sendPos);
       }
-    } while ((abs(position.x - request->x) > errorLin || abs(position.y - request->y) > errorLin));
-
+    }
+    // Finalização
     sendPos.linear.x = sendPos.angular.z = 0;
     dollySetPosition->publish(sendPos);
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Solicitação concluida...");
